@@ -1,18 +1,38 @@
 #include <iostream>
 #include <list>
 #include <map>
-#include <set>
+#include <vector>
+
+#include <cstdio>
 
 using namespace std;
 
 namespace {
+    static void log(const char *prefix, const char *file, int line, const char *format, ...) {
+#ifdef BUILD_DEBUG
+        static constexpr size_t print_bufsize = 255;
+        char buf[print_bufsize];
+        va_list args;
+
+        va_start(args, format);
+        vsnprintf(buf, print_bufsize, format, args);
+        va_end(args);
+
+        fprintf(stdout, "%s %s:%d %s\n", prefix, file, line, buf);
+#endif
+    }
+
+#define LOG_DEBUG(format, ...) \
+    log("[DEBUG]", __FILE__, __LINE__, format, ##__VA_ARGS__)
+
+
     class Vertice {
     public:
-        string name {"default_name"};
+        string name{"default_name"};
 
         Vertice() = default;
 
-        Vertice(string _name): name(_name) {};
+        Vertice(string _name) : name(_name) {};
 
         Vertice(map<Vertice *, unsigned> &neighbours) : neighbours(neighbours) {};
 
@@ -33,55 +53,47 @@ namespace {
         //TODO: structures on heap
     public:
         static unsigned dijkstra_spf(list<Vertice *> &v, Vertice &start, Vertice &destination) {
-            set<Vertice *, bool (*)(const Vertice *, const Vertice *)> unvisited(
-                    [](const Vertice *v1, const Vertice *v2) { return v1->tentative_dst < v2->tentative_dst; }
-            );
-            set<Vertice *> visited{};
+            vector<Vertice *> unvisited{};
+            vector<Vertice *> visited{};
             //TODO: boost range, boost filter, multiindex(database)
 
             for (Vertice *vertice : v) {
-                unvisited.insert(vertice);
+                unvisited.push_back(vertice);
             }
 
             auto current = find(unvisited.begin(), unvisited.end(), &start);
             if (current == unvisited.end()) {
-                cout << " start is not a part of the graph" << endl;
+                cout << "The start is not a part of the graph" << endl;
                 return UINT_MAX;
-                //TODO: throw an exception
             }
 
-            auto temp = unvisited.extract(current);
-            temp.value()->tentative_dst = 0;
-            unvisited.insert(std::move(temp));
+            (*current)->tentative_dst = 0;
 
+            auto v_comp = [](const Vertice *v1, const Vertice *v2) { return v1->tentative_dst < v2->tentative_dst; };
 
             while (true) {
-                cout << "Current node: " << (*current)->name << endl;
+                LOG_DEBUG("current vertice = %s", (*current)->name.c_str());
                 for (auto &_neighbour : (*current)->neighbours) {
-                    cout << "Current neightbour: " << _neighbour.first->name <<endl;
+                    LOG_DEBUG("\tneighbour = %s", _neighbour.first->name.c_str());
                     //TODO: just add field "visited"
                     auto _vertice = find(unvisited.begin(), unvisited.end(), _neighbour.first);
                     if (_vertice == unvisited.end())
                         continue;
 
-                    auto node = unvisited.extract(_vertice);
-
-                    node.value()->tentative_dst = min(_neighbour.first->tentative_dst,
-                                                      (*current)->tentative_dst + _neighbour.second);
-
-                    //TODO: find a way to re-sort without re-placing
-                    unvisited.insert(std::move(node));
+                    (*_vertice)->tentative_dst = min(_neighbour.first->tentative_dst,
+                                                     (*current)->tentative_dst + _neighbour.second);
                 }
-
-                visited.insert(std::move(unvisited.extract(current)));
 
                 if (*current == &destination)
                     break;
 
-                if (unvisited.empty())
+                unvisited.erase(current);
+
+                if (unvisited.empty()) {
                     break;
-                else {
-                    current = unvisited.begin();
+                } else {
+                    make_heap(unvisited.begin(), unvisited.end(), v_comp);
+                    current = unvisited.end() - 1;
                     if ((*current)->tentative_dst == UINT_MAX) {
                         cout << "No connection between nodes!" << endl;
                         return UINT_MAX;
