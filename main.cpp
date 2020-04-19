@@ -92,6 +92,7 @@ namespace {
                 if (unvisited.empty()) {
                     break;
                 } else {
+                    //TODO: try map instead
                     make_heap(unvisited.begin(), unvisited.end(), v_comp);
                     current = unvisited.end() - 1;
                     if ((*current)->tentative_dst == UINT_MAX) {
